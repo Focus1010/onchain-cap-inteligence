@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getMoralis, BASE_CHAIN_ID, initMoralis } from '../services/moralis';
 import { getCache, setCache, generateCacheKey } from '../services/redis';
+import { classifyAddress, ClassificationType } from '../services/classification.service';
 import { ErrorResponse } from '../types';
 
 // Validate Ethereum address
@@ -77,47 +78,67 @@ async function analyzeToken(
     // Fetch pools (empty for now - Moralis doesn't have direct getTokenPairs)
     const pools: any[] = [];
 
-    // Get top 5 holders by percentage
-    const topHolders = holders
+    // Get all pool addresses for LP detection
+    const poolAddresses: string[] = pools.map((p: any) => p.pair_address?.toLowerCase());
+
+    // Classify all holders with new detailed classification
+    const classifiedHolders = holders.map((holder: any) => ({
+      ...holder,
+      classification: classifyAddress(holder, poolAddresses),
+    }));
+
+    // Classification summary with all 7 types
+    const classificationSummary = {
+      eoa_count: 0,
+      smart_wallet_count: 0,
+      lp_count: 0,
+      staking_count: 0,
+      multisig_count: 0,
+      burn_count: 0,
+      unknown_contract_count: 0,
+    };
+
+    classifiedHolders.forEach((holder: any) => {
+      const classification: ClassificationType = holder.classification;
+      switch (classification) {
+        case 'eoa':
+          classificationSummary.eoa_count++;
+          break;
+        case 'smart_wallet':
+          classificationSummary.smart_wallet_count++;
+          break;
+        case 'lp':
+          classificationSummary.lp_count++;
+          break;
+        case 'staking':
+          classificationSummary.staking_count++;
+          break;
+        case 'multisig':
+          classificationSummary.multisig_count++;
+          break;
+        case 'burn':
+          classificationSummary.burn_count++;
+          break;
+        case 'contract':
+          classificationSummary.unknown_contract_count++;
+          break;
+      }
+    });
+
+    // Get top 5 holders by percentage (from classified holders)
+    const topHolders = classifiedHolders
       .sort((a: any, b: any) => b.percentage_relative_to_total_supply - a.percentage_relative_to_total_supply)
       .slice(0, 5);
 
     // Calculate concentration metrics
     const raw_top5 = topHolders.reduce((sum: number, h: any) => sum + h.percentage_relative_to_total_supply, 0);
-    const adjustedHolders = topHolders.filter((h: any) => !h.is_contract);
+    
+    // Adjusted concentration includes EOAs and smart wallets (individual control)
+    const adjustedHolders = topHolders.filter((h: any) => h.classification === 'eoa' || h.classification === 'smart_wallet');
     const adjusted_top5 = adjustedHolders.reduce((sum: number, h: any) => sum + h.percentage_relative_to_total_supply, 0);
-
-    // Classification logic
-    const classification = {
-      eoa_count: 0,
-      contract_count: 0,
-      lp_count: 0,
-      burn_count: 0,
-    };
-
-    // Get all pool addresses for LP detection
-    const poolAddresses = new Set(pools.map((p: any) => p.pair_address?.toLowerCase()));
-
-    holders.forEach((holder: any) => {
-      const holderAddress = holder.address.toLowerCase();
-
-      if (!holder.is_contract) {
-        // EOA (Externally Owned Account)
-        classification.eoa_count++;
-      } else if (poolAddresses.has(holderAddress)) {
-        // LP (Liquidity Pool)
-        classification.lp_count++;
-      } else if (
-        (holder.entity_label && holder.entity_label.toLowerCase().includes('burn')) ||
-        holderAddress === '0x000000000000000000000000000000000000dead'
-      ) {
-        // Burn address
-        classification.burn_count++;
-      } else {
-        // Regular contract
-        classification.contract_count++;
-      }
-    });
+    
+    // Individual holders count = EOAs + smart wallets
+    const individual_holders = classificationSummary.eoa_count + classificationSummary.smart_wallet_count;
 
     // Build the response
     const analysis = {
@@ -136,17 +157,20 @@ async function analyzeToken(
           percentage_relative_to_total_supply: h.percentage_relative_to_total_supply,
           is_contract: h.is_contract,
           entity_label: h.entity_label,
+          classification: h.classification,
         })),
       },
       concentration: {
         raw_top5: raw_top5,
         adjusted_top5: adjusted_top5,
+        individual_holders: individual_holders,
         eoa_only_top5: adjustedHolders.map((h: any) => ({
           address: h.address,
           balance_formatted: h.balance_formatted,
           percentage_relative_to_total_supply: h.percentage_relative_to_total_supply,
           is_contract: h.is_contract,
           entity_label: h.entity_label,
+          classification: h.classification,
         })),
       },
       pools: {
@@ -154,7 +178,7 @@ async function analyzeToken(
         total_liquidity_usd: pools.reduce((sum: number, p: any) => sum + (p.liquidity_usd || 0), 0),
         pools: pools,
       },
-      classification_summary: classification,
+      classification_summary: classificationSummary,
       analyzed_at: new Date().toISOString(),
     };
 
