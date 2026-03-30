@@ -8,6 +8,7 @@ const cors_1 = __importDefault(require("@fastify/cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const tokens_1 = require("./routes/tokens");
 const health_1 = require("./routes/health");
+const analyze_1 = require("./routes/analyze");
 dotenv_1.default.config();
 const PORT = parseInt(process.env.PORT || '3001');
 const fastify = (0, fastify_1.default)({
@@ -44,6 +45,7 @@ async function registerRoutes() {
     await registerCors();
     await fastify.register(health_1.healthRoutes);
     await fastify.register(tokens_1.tokenRoutes);
+    await fastify.register(analyze_1.analyzeRoutes);
 }
 // Start server
 async function start() {

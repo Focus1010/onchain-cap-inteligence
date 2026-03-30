@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import { tokenRoutes } from './routes/tokens';
 import { healthRoutes } from './routes/health';
+import { analyzeRoutes } from './routes/analyze';
 
 dotenv.config();
 
@@ -47,6 +48,7 @@ async function registerRoutes() {
   await registerCors();
   await fastify.register(healthRoutes);
   await fastify.register(tokenRoutes);
+  await fastify.register(analyzeRoutes);
 }
 
 // Start server

@@ -1,0 +1,176 @@
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { getMoralis, BASE_CHAIN_ID, initMoralis } from '../services/moralis';
+import { getCache, setCache, generateCacheKey } from '../services/redis';
+import { ErrorResponse } from '../types';
+
+// Validate Ethereum address
+function isValidAddress(address: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+// Analyze request body
+interface AnalyzeRequest {
+  address: string;
+  chain: string;
+}
+
+// POST /v1/analyze
+async function analyzeToken(
+  request: FastifyRequest<{ Body: AnalyzeRequest }>,
+  reply: FastifyReply
+): Promise<void> {
+  const { address, chain } = request.body;
+
+  // Validate address
+  if (!address) {
+    reply.code(400).send({
+      error: 'Token address is required',
+      details: 'Please provide a token address in the request body',
+    } as ErrorResponse);
+    return;
+  }
+
+  if (!isValidAddress(address)) {
+    reply.code(400).send({
+      error: 'Invalid address',
+      details: 'Address must be a valid Ethereum address (0x + 40 hex characters)',
+    } as ErrorResponse);
+    return;
+  }
+
+  try {
+    // Check cache first
+    const cacheKey = generateCacheKey('analyze', address);
+    const cached = await getCache<any>(cacheKey);
+    if (cached) {
+      reply.send(cached);
+      return;
+    }
+
+    // Initialize Moralis if needed
+    await initMoralis();
+    const Moralis = getMoralis();
+
+    // Fetch metadata
+    const metadataResponse = await Moralis.EvmApi.token.getTokenMetadata({
+      chain: BASE_CHAIN_ID,
+      addresses: [address],
+    });
+
+    const tokenData: any = metadataResponse.result[0]?.token || {};
+
+    // Fetch holders
+    const holdersResponse = await Moralis.EvmApi.token.getTokenOwners({
+      chain: BASE_CHAIN_ID,
+      tokenAddress: address,
+      limit: 100,
+    });
+
+    const holders: any[] = holdersResponse.result.map((owner: any) => ({
+      address: owner.ownerAddress,
+      balance_formatted: owner.balanceFormatted,
+      percentage_relative_to_total_supply: owner.percentageRelativeToTotalSupply,
+      is_contract: owner.isContract,
+      entity_label: owner.entityLabel || null,
+    }));
+
+    // Fetch pools (empty for now - Moralis doesn't have direct getTokenPairs)
+    const pools: any[] = [];
+
+    // Get top 5 holders by percentage
+    const topHolders = holders
+      .sort((a: any, b: any) => b.percentage_relative_to_total_supply - a.percentage_relative_to_total_supply)
+      .slice(0, 5);
+
+    // Calculate concentration metrics
+    const raw_top5 = topHolders.reduce((sum: number, h: any) => sum + h.percentage_relative_to_total_supply, 0);
+    const adjustedHolders = topHolders.filter((h: any) => !h.is_contract);
+    const adjusted_top5 = adjustedHolders.reduce((sum: number, h: any) => sum + h.percentage_relative_to_total_supply, 0);
+
+    // Classification logic
+    const classification = {
+      eoa_count: 0,
+      contract_count: 0,
+      lp_count: 0,
+      burn_count: 0,
+    };
+
+    // Get all pool addresses for LP detection
+    const poolAddresses = new Set(pools.map((p: any) => p.pair_address?.toLowerCase()));
+
+    holders.forEach((holder: any) => {
+      const holderAddress = holder.address.toLowerCase();
+
+      if (!holder.is_contract) {
+        // EOA (Externally Owned Account)
+        classification.eoa_count++;
+      } else if (poolAddresses.has(holderAddress)) {
+        // LP (Liquidity Pool)
+        classification.lp_count++;
+      } else if (
+        (holder.entity_label && holder.entity_label.toLowerCase().includes('burn')) ||
+        holderAddress === '0x000000000000000000000000000000000000dead'
+      ) {
+        // Burn address
+        classification.burn_count++;
+      } else {
+        // Regular contract
+        classification.contract_count++;
+      }
+    });
+
+    // Build the response
+    const analysis = {
+      token: {
+        name: tokenData.name || 'Unknown',
+        symbol: tokenData.symbol || 'UNKNOWN',
+        total_supply_formatted: tokenData.totalSupplyFormatted || tokenData.total_supply_formatted || '0',
+        logo: tokenData.logo || null,
+        verified_contract: tokenData.verified || tokenData.verified_contract || false,
+      },
+      holders: {
+        total_holders: holders.length,
+        top_holders: topHolders.map((h: any) => ({
+          address: h.address,
+          balance_formatted: h.balance_formatted,
+          percentage_relative_to_total_supply: h.percentage_relative_to_total_supply,
+          is_contract: h.is_contract,
+          entity_label: h.entity_label,
+        })),
+      },
+      concentration: {
+        raw_top5: raw_top5,
+        adjusted_top5: adjusted_top5,
+        eoa_only_top5: adjustedHolders.map((h: any) => ({
+          address: h.address,
+          balance_formatted: h.balance_formatted,
+          percentage_relative_to_total_supply: h.percentage_relative_to_total_supply,
+          is_contract: h.is_contract,
+          entity_label: h.entity_label,
+        })),
+      },
+      pools: {
+        total_pools: pools.length,
+        total_liquidity_usd: pools.reduce((sum: number, p: any) => sum + (p.liquidity_usd || 0), 0),
+        pools: pools,
+      },
+      classification_summary: classification,
+      analyzed_at: new Date().toISOString(),
+    };
+
+    // Cache the full analysis with 10 minute TTL
+    await setCache(cacheKey, analysis, 600);
+
+    reply.send(analysis);
+  } catch (error: any) {
+    console.error('Error analyzing token:', error);
+    reply.code(500).send({
+      error: 'Analysis failed',
+      details: error.message || 'Unknown error occurred',
+    } as ErrorResponse);
+  }
+}
+
+export async function analyzeRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.post('/v1/analyze', analyzeToken);
+}

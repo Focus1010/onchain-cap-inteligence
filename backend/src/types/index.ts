@@ -6,6 +6,18 @@ export interface TokenHolder {
   entity_label: string | null;
 }
 
+export interface TokenMetadata {
+  name: string;
+  symbol: string;
+  decimals: number;
+  total_supply: string;
+  total_supply_formatted: string;
+  contract_type: string;
+  verified_contract: boolean;
+  logo: string | null;
+  created_at: string | null;
+}
+
 export interface Pool {
   pair_address: string;
   exchange_name: string;

@@ -151,9 +151,62 @@ async function getConcentration(request, reply) {
         });
     }
 }
+// GET /v1/tokens/:address/metadata
+async function getMetadata(request, reply) {
+    const { address } = request.params;
+    if (!isValidAddress(address)) {
+        reply.code(400).send({
+            error: 'Invalid address',
+            details: 'Address must be a valid Ethereum address (0x + 40 hex characters)',
+        });
+        return;
+    }
+    try {
+        // Check cache first
+        const cacheKey = (0, redis_1.generateCacheKey)('metadata', address);
+        const cached = await (0, redis_1.getCache)(cacheKey);
+        if (cached) {
+            reply.send(cached);
+            return;
+        }
+        // Initialize Moralis if needed
+        await (0, moralis_1.initMoralis)();
+        const Moralis = (0, moralis_1.getMoralis)();
+        // Call Moralis getTokenMetadata
+        const response = await Moralis.EvmApi.token.getTokenMetadata({
+            chain: moralis_1.BASE_CHAIN_ID,
+            addresses: [address],
+        });
+        // Log response structure for debugging
+        console.log('Moralis metadata response:', JSON.stringify(response, null, 2));
+        const tokenData = response.result[0].token;
+        const metadata = {
+            name: tokenData.name || 'Unknown',
+            symbol: tokenData.symbol || 'UNKNOWN',
+            decimals: tokenData.decimals || 18,
+            total_supply: tokenData.totalSupply || tokenData.total_supply || '0',
+            total_supply_formatted: tokenData.totalSupplyFormatted || tokenData.total_supply_formatted || '0',
+            contract_type: tokenData.contractType || tokenData.contract_type || 'ERC20',
+            verified_contract: tokenData.verifiedContract || tokenData.verified || false,
+            logo: tokenData.logo || null,
+            created_at: tokenData.createdAt || tokenData.created_at || null,
+        };
+        // Cache with 30 minute TTL (metadata changes rarely)
+        await (0, redis_1.setCache)(cacheKey, metadata, 1800);
+        reply.send(metadata);
+    }
+    catch (error) {
+        console.error('Error fetching metadata:', error);
+        reply.code(500).send({
+            error: 'Failed to fetch data',
+            details: error.message || 'Unknown error occurred',
+        });
+    }
+}
 async function tokenRoutes(fastify) {
     fastify.get('/v1/tokens/:address/holders', getHolders);
     fastify.get('/v1/tokens/:address/pools', getPools);
     fastify.get('/v1/tokens/:address/concentration', getConcentration);
+    fastify.get('/v1/tokens/:address/metadata', getMetadata);
 }
 //# sourceMappingURL=tokens.js.map
