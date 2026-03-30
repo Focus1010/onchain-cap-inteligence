@@ -5,10 +5,12 @@ const BURN_ADDRESSES = [
     '0x000000000000000000000000000000000000dead',
     '0x0000000000000000000000000000000000000000',
     '0x0000000000000000000000000000000000000001',
-];
+].map(a => a.toLowerCase());
 function classifyAddress(holder, poolAddresses) {
     const address = holder.address.toLowerCase();
     const entityLabel = (holder.entity_label || '').toLowerCase();
+    // Normalize pool addresses to lowercase for comparison
+    const normalizedPoolAddresses = poolAddresses.map(a => a.toLowerCase());
     // 1. EOA - is_contract is false
     if (!holder.is_contract) {
         return 'eoa';
@@ -21,7 +23,7 @@ function classifyAddress(holder, poolAddresses) {
         return 'burn';
     }
     // 3. Liquidity Pool
-    if (poolAddresses.includes(address)) {
+    if (normalizedPoolAddresses.includes(address)) {
         return 'lp';
     }
     const lpKeywords = ['pool', 'lp', 'liquidity', 'uniswap', 'aerodrome', 'baseswap', 'sushiswap'];
