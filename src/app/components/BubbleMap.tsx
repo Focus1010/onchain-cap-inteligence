@@ -3,6 +3,17 @@ import { motion } from 'motion/react';
 
 type HolderType = 'EOA' | 'LP' | 'Smart Wallet' | 'DAO' | 'Staking' | 'Burn';
 
+interface BubbleMapProps {
+  holders: Array<{
+    address: string;
+    balance_formatted: string;
+    percentage_relative_to_total_supply: number;
+    is_contract: boolean;
+    entity_label: string | null;
+    classification: 'eoa' | 'smart_wallet' | 'lp' | 'staking' | 'multisig' | 'burn' | 'contract';
+  }>;
+}
+
 interface Bubble {
   id: string;
   address: string;
@@ -26,33 +37,60 @@ const holderColors = {
   'Burn': '#6B7280',
 };
 
-// Initial mock data with physics properties
-const initialBubbles: Omit<Bubble, 'vx' | 'vy' | 'radius'>[] = [
-  { id: '1', address: '0x1234...5678', type: 'LP', percentage: 28, balance: '280,000,000', label: 'Uniswap V3 Pool', x: 400, y: 300 },
-  { id: '2', address: '0xabcd...ef01', type: 'EOA', percentage: 18, balance: '180,000,000', x: 250, y: 200 },
-  { id: '3', address: '0x9876...5432', type: 'DAO', percentage: 14, balance: '140,000,000', label: 'Treasury', x: 600, y: 250 },
-  { id: '4', address: '0x2468...1357', type: 'EOA', percentage: 12, balance: '120,000,000', x: 300, y: 450 },
-  { id: '5', address: '0x1357...2468', type: 'Staking', percentage: 10, balance: '100,000,000', label: 'Staking Contract', x: 550, y: 450 },
-  { id: '6', address: '0xdef0...abcd', type: 'Smart Wallet', percentage: 6, balance: '60,000,000', x: 450, y: 150 },
-  { id: '7', address: '0x7890...4321', type: 'EOA', percentage: 4, balance: '40,000,000', x: 200, y: 350 },
-  { id: '8', address: '0x5678...9012', type: 'Smart Wallet', percentage: 3, balance: '30,000,000', x: 650, y: 370 },
-  { id: '9', address: '0x0000...dead', type: 'Burn', percentage: 3, balance: '30,000,000', label: 'Burn Address', x: 150, y: 250 },
-  { id: '10', address: '0x3456...7890', type: 'EOA', percentage: 2, balance: '20,000,000', x: 500, y: 550 },
-];
+// Map API classification to display type
+function mapClassification(
+  classification: 'eoa' | 'smart_wallet' | 'lp' | 'staking' | 'multisig' | 'burn' | 'contract',
+  entityLabel: string | null
+): HolderType {
+  switch (classification) {
+    case 'eoa':
+    case 'contract':
+      return 'EOA';
+    case 'smart_wallet':
+      return 'Smart Wallet';
+    case 'lp':
+      return 'LP';
+    case 'multisig':
+      return 'DAO';
+    case 'staking':
+      return 'Staking';
+    case 'burn':
+      return 'Burn';
+    default:
+      return 'EOA';
+  }
+}
 
-export function BubbleMap() {
+// Truncate address for display
+function truncateAddress(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+export function BubbleMap({ holders }: BubbleMapProps) {
   const [selectedBubble, setSelectedBubble] = useState<Bubble | null>(null);
   const [hoveredBubble, setHoveredBubble] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<HolderType | 'All'>('All');
   const [tooltip, setTooltip] = useState<{ x: number; y: number; bubble: Bubble } | null>(null);
-  const [bubbles, setBubbles] = useState<Bubble[]>(() => 
-    initialBubbles.map(b => ({
-      ...b,
+  
+  // Transform holders to bubbles with physics properties
+  const initialBubbles = useMemo(() => {
+    return holders.slice(0, 10).map((h, index) => ({
+      id: index.toString(),
+      address: truncateAddress(h.address),
+      type: mapClassification(h.classification, h.entity_label),
+      percentage: parseFloat(h.percentage_relative_to_total_supply.toFixed(1)),
+      balance: h.balance_formatted,
+      label: h.entity_label || undefined,
+      x: 200 + (index % 5) * 120 + Math.random() * 50,
+      y: 150 + Math.floor(index / 5) * 200 + Math.random() * 50,
       vx: (Math.random() - 0.5) * 0.3,
       vy: (Math.random() - 0.5) * 0.3,
-      radius: Math.sqrt(b.percentage) * 20
-    }))
-  );
+      radius: Math.sqrt(h.percentage_relative_to_total_supply) * 15 + 20,
+    }));
+  }, [holders]);
+  
+  const [bubbles, setBubbles] = useState<Bubble[]>(initialBubbles);
   const [draggedBubble, setDraggedBubble] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   

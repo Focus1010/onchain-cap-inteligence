@@ -13,7 +13,18 @@ interface Holder {
   balance: string;
 }
 
-const holderColors = {
+interface HoldersProps {
+  holders: Array<{
+    address: string;
+    balance_formatted: string;
+    percentage_relative_to_total_supply: number;
+    is_contract: boolean;
+    entity_label: string | null;
+    classification: 'eoa' | 'smart_wallet' | 'lp' | 'staking' | 'multisig' | 'burn' | 'contract';
+  }>;
+}
+
+const holderColors: Record<HolderType, string> = {
   'EOA': '#10B981',
   'LP': '#3B82F6',
   'Smart Wallet': '#8B5CF6',
@@ -22,27 +33,52 @@ const holderColors = {
   'Burn': '#6B7280',
 };
 
-const mockHolders: Holder[] = [
-  { rank: 1, address: '0x1234...5678', label: 'Uniswap V3 Pool', type: 'LP', percentage: 28, balance: '280,000,000' },
-  { rank: 2, address: '0xabcd...ef01', type: 'EOA', percentage: 18, balance: '180,000,000' },
-  { rank: 3, address: '0x9876...5432', label: 'Treasury', type: 'DAO', percentage: 14, balance: '140,000,000' },
-  { rank: 4, address: '0x2468...1357', type: 'EOA', percentage: 12, balance: '120,000,000' },
-  { rank: 5, address: '0x1357...2468', label: 'Staking Contract', type: 'Staking', percentage: 10, balance: '100,000,000' },
-  { rank: 6, address: '0xdef0...abcd', type: 'Smart Wallet', percentage: 6, balance: '60,000,000' },
-  { rank: 7, address: '0x7890...4321', type: 'EOA', percentage: 4, balance: '40,000,000' },
-  { rank: 8, address: '0x5678...9012', type: 'Smart Wallet', percentage: 3, balance: '30,000,000' },
-  { rank: 9, address: '0x0000...dead', label: 'Burn Address', type: 'Burn', percentage: 3, balance: '30,000,000' },
-  { rank: 10, address: '0x3456...7890', type: 'EOA', percentage: 2, balance: '20,000,000' },
-  { rank: 11, address: '0xbcde...4567', type: 'EOA', percentage: 1.5, balance: '15,000,000' },
-  { rank: 12, address: '0x6789...abcd', type: 'Smart Wallet', percentage: 1.5, balance: '15,000,000' },
-];
+// Map API classification to display type
+function mapClassification(
+  classification: 'eoa' | 'smart_wallet' | 'lp' | 'staking' | 'multisig' | 'burn' | 'contract',
+  entityLabel: string | null
+): HolderType {
+  switch (classification) {
+    case 'eoa':
+    case 'contract':
+      return 'EOA';
+    case 'smart_wallet':
+      return 'Smart Wallet';
+    case 'lp':
+      return 'LP';
+    case 'multisig':
+      return 'DAO';
+    case 'staking':
+      return 'Staking';
+    case 'burn':
+      return 'Burn';
+    default:
+      return 'EOA';
+  }
+}
+
+// Truncate address to 0x1234...5678 format
+function truncateAddress(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
 
 type SortKey = 'rank' | 'percentage' | 'balance';
 
-export function Holders() {
+export function Holders({ holders }: HoldersProps) {
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedHolder, setSelectedHolder] = useState<Holder | null>(null);
+
+  // Transform API holders to display format
+  const displayHolders: Holder[] = holders.map((h, index) => ({
+    rank: index + 1,
+    address: truncateAddress(h.address),
+    label: h.entity_label || undefined,
+    type: mapClassification(h.classification, h.entity_label),
+    percentage: parseFloat(h.percentage_relative_to_total_supply.toFixed(2)),
+    balance: h.balance_formatted,
+  }));
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -53,7 +89,7 @@ export function Holders() {
     }
   };
 
-  const sortedHolders = [...mockHolders].sort((a, b) => {
+  const sortedHolders = [...displayHolders].sort((a, b) => {
     let comparison = 0;
     
     if (sortKey === 'rank') {

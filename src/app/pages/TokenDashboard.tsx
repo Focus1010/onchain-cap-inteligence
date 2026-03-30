@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router';
 import { Radar, ArrowLeft, Copy, ExternalLink, Menu } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -6,6 +6,7 @@ import { BubbleMap } from '../components/BubbleMap';
 import { Holders } from '../components/Holders';
 import { ControlStructure } from '../components/ControlStructure';
 import { Metrics } from '../components/Metrics';
+import { analyzeToken, getTokenRiskScore, type TokenAnalysis, type RiskScoreResult } from '../../api/capintel';
 
 type Tab = 'bubble' | 'holders' | 'control' | 'metrics';
 
@@ -15,15 +16,26 @@ export function TokenDashboard() {
   const [copied, setCopied] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Mock token data
-  const tokenData = {
-    name: 'Example Token',
-    symbol: 'EXT',
-    totalSupply: '1,000,000,000',
-    network: 'Base',
-    deployer: '0x1234...5678',
-    risk: 'Low' as const,
-  };
+  const [analysis, setAnalysis] = useState<TokenAnalysis | null>(null);
+  const [riskScore, setRiskScore] = useState<RiskScoreResult | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!address) return;
+    
+    const fetchData = async () => {
+      setLoading(true);
+      const [analysisData, riskData] = await Promise.all([
+        analyzeToken(address),
+        getTokenRiskScore(address),
+      ]);
+      setAnalysis(analysisData);
+      setRiskScore(riskData);
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [address]);
 
   const tabs = [
     { id: 'bubble' as Tab, label: 'Bubble Map' },
@@ -182,8 +194,12 @@ export function TokenDashboard() {
               transition={{ duration: 0.6, delay: 0.2 }}
             >
               <div className="flex items-center gap-2 md:gap-3 mb-2">
-                <h2 className="text-xl md:text-3xl font-bold text-[#F9FAFB]">{tokenData.name}</h2>
-                <span className="text-[#9CA3AF] font-semibold text-base md:text-lg">{tokenData.symbol}</span>
+                <h2 className="text-xl md:text-3xl font-bold text-[#F9FAFB]">
+                  {loading ? 'Loading...' : analysis?.token.name || 'Unknown'}
+                </h2>
+                <span className="text-[#9CA3AF] font-semibold text-base md:text-lg">
+                  {loading ? '' : analysis?.token.symbol || ''}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-xs md:text-sm text-[#6B7280]">
                 <span className="font-mono truncate max-w-[200px] md:max-w-none">{address}</span>
@@ -213,27 +229,30 @@ export function TokenDashboard() {
             >
               <div>
                 <div className="text-[#6B7280] mb-1 font-medium text-xs md:text-sm">Total Supply</div>
-                <div className="text-[#F9FAFB] font-bold text-sm md:text-lg">{tokenData.totalSupply}</div>
+                <div className="text-[#F9FAFB] font-bold text-sm md:text-lg">
+                  {loading ? '...' : analysis?.token.total_supply_formatted || 'N/A'}
+                </div>
               </div>
               <div>
                 <div className="text-[#6B7280] mb-1 font-medium text-xs md:text-sm">Network</div>
-                <div className="text-[#F9FAFB] font-bold text-sm md:text-lg">{tokenData.network}</div>
+                <div className="text-[#F9FAFB] font-bold text-sm md:text-lg">Base</div>
               </div>
               <div>
                 <div className="text-[#6B7280] mb-1 font-medium text-xs md:text-sm">Deployer</div>
-                <div className="text-[#F9FAFB] font-mono font-bold text-xs md:text-base">{tokenData.deployer}</div>
+                <div className="text-[#F9FAFB] font-mono font-bold text-xs md:text-base">N/A</div>
               </div>
               <div>
                 <div className="text-[#6B7280] mb-1 font-medium text-xs md:text-sm">Risk</div>
                 <motion.div 
                   className={`inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-xl font-bold shadow-lg text-xs md:text-sm ${
-                    tokenData.risk === 'Low' ? 'bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30' :
-                    tokenData.risk === 'Medium' ? 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/30' :
+                    riskScore?.risk_level === 'LOW' ? 'bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30' :
+                    riskScore?.risk_level === 'MEDIUM' ? 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/30' :
+                    riskScore?.risk_level === 'HIGH' ? 'bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30' :
                     'bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30'
                   }`}
                   whileHover={{ scale: 1.05 }}
                 >
-                  {tokenData.risk}
+                  {loading ? '...' : riskScore?.risk_level || 'N/A'}
                 </motion.div>
               </div>
             </motion.div>
@@ -280,18 +299,38 @@ export function TokenDashboard() {
 
       {/* Tab Content */}
       <div className="relative max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.4 }}
-        >
-          {activeTab === 'bubble' && <BubbleMap />}
-          {activeTab === 'holders' && <Holders />}
-          {activeTab === 'control' && <ControlStructure />}
-          {activeTab === 'metrics' && <Metrics />}
-        </motion.div>
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center justify-center h-64"
+          >
+            <div className="animate-pulse flex flex-col items-center gap-4">
+              <div className="w-12 h-12 rounded-full border-4 border-[#06B6D4]/30 border-t-[#06B6D4] animate-spin" />
+              <span className="text-[#9CA3AF] font-medium">Analyzing token...</span>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4 }}
+          >
+            {activeTab === 'bubble' && <BubbleMap holders={analysis?.holders.top_holders || []} />}
+            {activeTab === 'holders' && <Holders holders={analysis?.holders.top_holders || []} />}
+            {activeTab === 'control' && <ControlStructure classificationSummary={analysis?.classification_summary} totalHolders={analysis?.holders.total_holders || 0} />}
+            {activeTab === 'metrics' && (
+              <Metrics
+                concentration={analysis?.concentration}
+                riskScore={riskScore}
+                totalHolders={analysis?.holders.total_holders || 0}
+                pools={analysis?.pools}
+              />
+            )}
+          </motion.div>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { tokenRoutes } from './routes/tokens';
 import { healthRoutes } from './routes/health';
 import { analyzeRoutes } from './routes/analyze';
+import { riskScoreRoutes } from './routes/risk-score';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ async function registerRoutes() {
   await fastify.register(healthRoutes);
   await fastify.register(tokenRoutes);
   await fastify.register(analyzeRoutes);
+  await fastify.register(riskScoreRoutes);
 }
 
 // Start server

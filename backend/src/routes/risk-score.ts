@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { getTokenAnalysis } from '../services/analyze.service';
+import { calculateRiskScore } from '../services/risk-score.service';
 import { getCache, setCache, generateCacheKey } from '../services/redis';
 import { ErrorResponse } from '../types';
 
@@ -8,24 +8,18 @@ function isValidAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
-// Analyze request body
-interface AnalyzeRequest {
-  address: string;
-  chain: string;
-}
-
-// POST /v1/analyze
-async function analyzeToken(
-  request: FastifyRequest<{ Body: AnalyzeRequest }>,
+// GET /v1/tokens/:address/risk-score
+async function getRiskScore(
+  request: FastifyRequest<{ Params: { address: string } }>,
   reply: FastifyReply
 ): Promise<void> {
-  const { address, chain } = request.body;
+  const { address } = request.params;
 
   // Validate address
   if (!address) {
     reply.code(400).send({
       error: 'Token address is required',
-      details: 'Please provide a token address in the request body',
+      details: 'Please provide a token address in the URL parameter',
     } as ErrorResponse);
     return;
   }
@@ -40,26 +34,29 @@ async function analyzeToken(
 
   try {
     // Check cache first
-    const cacheKey = generateCacheKey('analyze', address);
+    const cacheKey = generateCacheKey('risk', address);
     const cached = await getCache(cacheKey);
     if (cached) {
       reply.send(cached);
       return;
     }
 
-    // Get full token analysis
-    const analysis = await getTokenAnalysis(address);
+    // Calculate risk score
+    const riskScore = await calculateRiskScore(address);
 
-    reply.send(analysis);
+    // Cache the result with 10 minute TTL
+    await setCache(cacheKey, riskScore, 600);
+
+    reply.send(riskScore);
   } catch (error: any) {
-    console.error('Error analyzing token:', error);
+    console.error('Error calculating risk score:', error);
     reply.code(500).send({
-      error: 'Analysis failed',
+      error: 'Risk score calculation failed',
       details: error.message || 'Unknown error occurred',
     } as ErrorResponse);
   }
 }
 
-export async function analyzeRoutes(fastify: FastifyInstance): Promise<void> {
-  fastify.post('/v1/analyze', analyzeToken);
+export async function riskScoreRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.get('/v1/tokens/:address/risk-score', getRiskScore);
 }

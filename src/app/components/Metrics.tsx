@@ -1,5 +1,13 @@
-import { TrendingUp, TrendingDown, Users, Wallet, Lock, Flame } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Wallet, Droplets, Layers } from 'lucide-react';
 import { motion } from 'motion/react';
+import type { TokenAnalysis, RiskScoreResult } from '../../api/capintel';
+
+interface MetricsProps {
+  concentration?: TokenAnalysis['concentration'];
+  riskScore?: RiskScoreResult | null;
+  totalHolders: number;
+  pools?: TokenAnalysis['pools'];
+}
 
 interface MetricCard {
   title: string;
@@ -9,49 +17,47 @@ interface MetricCard {
   icon: React.ReactNode;
 }
 
-export function Metrics() {
+// Format currency with $XXX,XXX format
+function formatCurrency(value: number): string {
+  if (value >= 1000000) {
+    return `$${(value / 1000000).toFixed(2)}M`;
+  } else if (value >= 1000) {
+    return `$${(value / 1000).toFixed(1)}K`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+export function Metrics({ concentration, riskScore, totalHolders, pools }: MetricsProps) {
   const metrics: MetricCard[] = [
     {
       title: 'Total Holders',
-      value: '12,543',
-      change: '+234',
-      trend: 'up',
+      value: totalHolders.toLocaleString(),
       icon: <Users className="w-6 h-6" />,
     },
     {
-      title: 'Unique Wallets',
-      value: '11,892',
-      change: '+189',
-      trend: 'up',
+      title: 'Top 5 Raw',
+      value: `${concentration?.raw_top5?.toFixed(1) || '0.0'}%`,
       icon: <Wallet className="w-6 h-6" />,
     },
     {
-      title: 'Gini Coefficient',
-      value: '0.72',
-      change: '-0.03',
-      trend: 'down',
-      icon: <TrendingDown className="w-6 h-6" />,
-    },
-    {
-      title: 'Locked Supply',
-      value: '24%',
-      change: '+2%',
-      trend: 'up',
-      icon: <Lock className="w-6 h-6" />,
-    },
-    {
-      title: 'Burned Supply',
-      value: '3%',
-      change: '+0.5%',
-      trend: 'up',
-      icon: <Flame className="w-6 h-6" />,
-    },
-    {
-      title: 'Top 10 Concentration',
-      value: '58%',
-      change: '-1.2%',
-      trend: 'down',
+      title: 'Top 5 Adjusted',
+      value: `${concentration?.adjusted_top5?.toFixed(1) || '0.0'}%`,
       icon: <TrendingUp className="w-6 h-6" />,
+    },
+    {
+      title: 'Total Pools',
+      value: pools?.total_pools?.toString() || '0',
+      icon: <Layers className="w-6 h-6" />,
+    },
+    {
+      title: 'Total Liquidity',
+      value: formatCurrency(pools?.total_liquidity_usd || 0),
+      icon: <Droplets className="w-6 h-6" />,
+    },
+    {
+      title: 'Risk Score',
+      value: riskScore ? `${riskScore.risk_score}/100` : 'N/A',
+      icon: <TrendingDown className="w-6 h-6" />,
     },
   ];
 
@@ -86,20 +92,6 @@ export function Metrics() {
           >
             <div className="flex items-start justify-between mb-4">
               <div className="text-[#06B6D4]">{metric.icon}</div>
-              {metric.change && (
-                <div
-                  className={`flex items-center gap-1 text-sm font-medium ${
-                    metric.trend === 'up' ? 'text-[#10B981]' : 'text-[#EF4444]'
-                  }`}
-                >
-                  {metric.trend === 'up' ? (
-                    <TrendingUp className="w-4 h-4" />
-                  ) : (
-                    <TrendingDown className="w-4 h-4" />
-                  )}
-                  {metric.change}
-                </div>
-              )}
             </div>
             <div className="text-2xl md:text-3xl font-semibold text-[#F9FAFB] mb-1">{metric.value}</div>
             <div className="text-sm text-[#9CA3AF]">{metric.title}</div>

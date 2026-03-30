@@ -1,20 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.analyzeRoutes = analyzeRoutes;
-const analyze_service_1 = require("../services/analyze.service");
+exports.riskScoreRoutes = riskScoreRoutes;
+const risk_score_service_1 = require("../services/risk-score.service");
 const redis_1 = require("../services/redis");
 // Validate Ethereum address
 function isValidAddress(address) {
     return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
-// POST /v1/analyze
-async function analyzeToken(request, reply) {
-    const { address, chain } = request.body;
+// GET /v1/tokens/:address/risk-score
+async function getRiskScore(request, reply) {
+    const { address } = request.params;
     // Validate address
     if (!address) {
         reply.code(400).send({
             error: 'Token address is required',
-            details: 'Please provide a token address in the request body',
+            details: 'Please provide a token address in the URL parameter',
         });
         return;
     }
@@ -27,25 +27,27 @@ async function analyzeToken(request, reply) {
     }
     try {
         // Check cache first
-        const cacheKey = (0, redis_1.generateCacheKey)('analyze', address);
+        const cacheKey = (0, redis_1.generateCacheKey)('risk', address);
         const cached = await (0, redis_1.getCache)(cacheKey);
         if (cached) {
             reply.send(cached);
             return;
         }
-        // Get full token analysis
-        const analysis = await (0, analyze_service_1.getTokenAnalysis)(address);
-        reply.send(analysis);
+        // Calculate risk score
+        const riskScore = await (0, risk_score_service_1.calculateRiskScore)(address);
+        // Cache the result with 10 minute TTL
+        await (0, redis_1.setCache)(cacheKey, riskScore, 600);
+        reply.send(riskScore);
     }
     catch (error) {
-        console.error('Error analyzing token:', error);
+        console.error('Error calculating risk score:', error);
         reply.code(500).send({
-            error: 'Analysis failed',
+            error: 'Risk score calculation failed',
             details: error.message || 'Unknown error occurred',
         });
     }
 }
-async function analyzeRoutes(fastify) {
-    fastify.post('/v1/analyze', analyzeToken);
+async function riskScoreRoutes(fastify) {
+    fastify.get('/v1/tokens/:address/risk-score', getRiskScore);
 }
-//# sourceMappingURL=analyze.js.map
+//# sourceMappingURL=risk-score.js.map

@@ -1,16 +1,48 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { motion } from 'motion/react';
 
-const data = [
-  { name: 'EOA', value: 36, color: '#10B981' },
-  { name: 'Liquidity Pools', value: 28, color: '#3B82F6' },
-  { name: 'DAO', value: 14, color: '#F59E0B' },
-  { name: 'Staking', value: 10, color: '#06B6D4' },
-  { name: 'Smart Wallet', value: 9, color: '#8B5CF6' },
-  { name: 'Burn', value: 3, color: '#6B7280' },
-];
+interface ControlStructureProps {
+  classificationSummary?: {
+    eoa_count: number;
+    smart_wallet_count: number;
+    lp_count: number;
+    staking_count: number;
+    multisig_count: number;
+    burn_count: number;
+    unknown_contract_count: number;
+  };
+  totalHolders: number;
+}
 
-export function ControlStructure() {
+const COLORS = {
+  'EOA': '#10B981',
+  'Liquidity Pools': '#3B82F6',
+  'DAO': '#F59E0B',
+  'Staking': '#06B6D4',
+  'Smart Wallet': '#8B5CF6',
+  'Burn': '#6B7280',
+  'Unknown': '#9CA3AF',
+};
+
+export function ControlStructure({ classificationSummary, totalHolders }: ControlStructureProps) {
+  // Calculate real data from classification summary
+  const data = classificationSummary && totalHolders > 0
+    ? [
+        { name: 'EOA', value: parseFloat(((classificationSummary.eoa_count + classificationSummary.smart_wallet_count) / totalHolders * 100).toFixed(1)), color: COLORS['EOA'] },
+        { name: 'Liquidity Pools', value: parseFloat((classificationSummary.lp_count / totalHolders * 100).toFixed(1)), color: COLORS['Liquidity Pools'] },
+        { name: 'DAO', value: parseFloat((classificationSummary.multisig_count / totalHolders * 100).toFixed(1)), color: COLORS['DAO'] },
+        { name: 'Staking', value: parseFloat((classificationSummary.staking_count / totalHolders * 100).toFixed(1)), color: COLORS['Staking'] },
+        { name: 'Burn', value: parseFloat((classificationSummary.burn_count / totalHolders * 100).toFixed(1)), color: COLORS['Burn'] },
+        { name: 'Unknown', value: parseFloat((classificationSummary.unknown_contract_count / totalHolders * 100).toFixed(1)), color: COLORS['Unknown'] },
+      ].filter(d => d.value > 0)
+    : [
+        { name: 'EOA', value: 36, color: COLORS['EOA'] },
+        { name: 'Liquidity Pools', value: 28, color: COLORS['Liquidity Pools'] },
+        { name: 'DAO', value: 14, color: COLORS['DAO'] },
+        { name: 'Staking', value: 10, color: COLORS['Staking'] },
+        { name: 'Burn', value: 3, color: COLORS['Burn'] },
+      ];
+
   return (
     <div className="max-w-4xl mx-auto">
       <motion.div 
