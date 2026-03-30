@@ -1,33 +1,27 @@
 {
-  "name": "chr-backend",
+  "name": "cap-intel-api",
   "version": "1.0.0",
-  "description": "CHR Backend API - Onchain Cap Table Intelligence",
-  "main": "dist/index.js",
+  "description": "",
+  "main": "index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
-    "clean": "rm -rf dist",
-    "lint": "echo 'Add linting configuration if needed'",
-    "test": "echo 'Add test configuration if needed'"
+    "dev": "ts-node src/index.ts"
   },
-  "keywords": ["blockchain", "ethereum", "base", "erc20", "token", "analytics"],
-  "author": "CHR Team",
-  "license": "MIT",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "axios": "^1.13.6",
-    "cors": "^2.8.6",
+    "@fastify/cors": "^11.2.0",
+    "@upstash/redis": "^1.37.0",
     "dotenv": "^17.3.1",
-    "ethers": "^6.16.0",
-    "express": "^5.2.1"
+    "fastify": "^5.8.4",
+    "moralis": "^2.27.2"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.3.5",
-    "nodemon": "^3.1.14",
+    "@types/node": "^25.5.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }

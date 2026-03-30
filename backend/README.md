@@ -1,223 +1,117 @@
-# CHR Backend API
+# Cap Intel API
 
-Onchain Cap Table Intelligence Backend Service
-
-## Overview
-
-This backend service provides REST API endpoints for analyzing ERC20 tokens on Base mainnet. It fetches token metadata and holder distribution data using blockchain RPC connections and Alchemy's indexer API.
-
-## Features
-
-- ✅ **Base Mainnet RPC Connection** - Reliable blockchain connectivity
-- ✅ **ERC20 Token Metadata** - Name, symbol, total supply, decimals
-- ✅ **Top Holder Fetching** - Using Alchemy API for indexed data
-- ✅ **Clean API Architecture** - Production-ready structure
-- ✅ **Comprehensive Error Handling** - Graceful error responses
-- ✅ **TypeScript Support** - Full type safety
-- ✅ **CORS Enabled** - Frontend integration ready
-
-## Tech Stack
-
-- **Node.js** - Runtime environment
-- **Express** - Web framework
-- **TypeScript** - Type safety
-- **Ethers.js** - Blockchain interaction
-- **Axios** - HTTP client for Alchemy API
-- **dotenv** - Environment variable management
-
-## Project Structure
-
-```
-backend/
-├── src/
-│   ├── index.ts              # Main server entry point
-│   ├── lib/
-│   │   └── rpc.ts          # RPC connection service
-│   ├── services/
-│   │   ├── tokenService.ts   # ERC20 metadata service
-│   │   └── holderService.ts  # Holder data service
-│   ├── routes/
-│   │   └── token.ts         # API routes
-│   └── types/
-│       └── index.ts         # TypeScript types
-├── dist/                   # Compiled JavaScript
-├── .env.example            # Environment variables template
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+A Fastify-based API for token cap table intelligence using Moralis as the sole data provider.
 
 ## Setup
 
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Installation
-
-1. Clone the repository
-2. Copy environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-4. Configure environment variables in `.env`:
-   ```env
-   # Base Mainnet RPC URL
-   BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/
-   
-   # Alchemy API Key
-   ALCHEMY_API_KEY=your_alchemy_api_key_here
-   
-   # Server Configuration
-   PORT=3001
-   NODE_ENV=development
-   ```
-
-### Running the Server
-
-**Development:**
+1. Install dependencies:
 ```bash
-npm run dev
+npm install
 ```
 
-**Production:**
+2. Create a `.env` file with your credentials:
+```env
+# Moralis API Key (get from https://admin.moralis.io/)
+MORALIS_API_KEY=your_moralis_api_key_here
+
+# Upstash Redis credentials (get from https://upstash.com/)
+UPSTASH_REDIS_REST_URL=your_upstash_redis_url
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
+
+# Server Configuration
+PORT=3001
+NODE_ENV=development
+```
+
+3. Build and run:
 ```bash
 npm run build
 npm start
 ```
 
+Or run in development mode:
+```bash
+npm run dev
+```
+
 ## API Endpoints
 
-### Health Check
-- `GET /health` - Server health status
+### GET /health
+Returns service health status.
 
-### API Info
-- `GET /api` - API documentation and endpoints
-
-### Token Analysis
-- `GET /api/token/:address` - Complete token data (metadata + holders)
-- `GET /api/token/:address/metadata` - Token metadata only
-- `GET /api/token/:address/holders?limit=50` - Token holders only
-
-### Request Examples
-
-```bash
-# Get complete token data
-curl "http://localhost:3001/api/token/0x4200000000000000000000000000000000000000006"
-
-# Get token metadata only
-curl "http://localhost:3001/api/token/0x4200000000000000000000000000000000000000006/metadata"
-
-# Get top 20 holders
-curl "http://localhost:3001/api/token/0x4200000000000000000000000000000000000000006/holders?limit=20"
-```
-
-### Response Format
-
-**Success Response:**
+**Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "name": "Example Token",
-    "symbol": "EXT",
-    "totalSupply": "1000000000.000000000000000000",
-    "holders": [
-      {
-        "address": "0x1234...5678",
-        "balance": "100000000.000000000000000000",
-        "percentage": 10.0
-      }
-    ]
-  },
-  "message": "Successfully fetched token data for EXT"
+  "status": "ok",
+  "timestamp": "2024-01-15T10:30:00.000Z"
 }
 ```
 
-**Error Response:**
+### GET /v1/tokens/:address/holders
+Returns token holders for a given token address on Base chain.
+
+**Parameters:**
+- `address` - Token contract address (0x...)
+
+**Response:**
+```json
+[
+  {
+    "address": "0x1234...",
+    "balance_formatted": "1000000.50",
+    "percentage_relative_to_total_supply": 25.5,
+    "is_contract": false,
+    "entity_label": "Binance"
+  }
+]
+```
+
+### GET /v1/tokens/:address/pools
+Returns liquidity pools for a token (currently returns empty array as Moralis SDK doesn't support this endpoint).
+
+**Response:**
+```json
+[]
+```
+
+### GET /v1/tokens/:address/concentration
+Returns concentration metrics for top 5 holders.
+
+**Response:**
 ```json
 {
-  "success": false,
-  "error": "INVALID_ADDRESS",
-  "message": "Invalid Ethereum address format",
-  "details": "..."
+  "raw_concentration": 75.5,
+  "adjusted_concentration": 45.2,
+  "raw_holders": [...],
+  "adjusted_holders": [...]
 }
 ```
 
-## Error Handling
+## Features
 
-The API includes comprehensive error handling for:
+- **Moralis Integration**: Uses Moralis EVM API for token data
+- **Redis Caching**: 5-minute TTL caching with Upstash Redis
+- **Request Logging**: Logs method, path, and response time
+- **Error Handling**: Proper error responses with 500 status codes
+- **Input Validation**: Validates Ethereum addresses
 
-- **Invalid Addresses** - Malformed Ethereum addresses
-- **Contract Validation** - Non-contract addresses or non-ERC20 contracts
-- **RPC Failures** - Network connectivity issues
-- **API Rate Limits** - Alchemy API throttling
-- **Timeouts** - Request timeouts
-- **Server Errors** - Internal server issues
+## Project Structure
 
-## Environment Variables
+```
+src/
+├── index.ts           # Main entry point
+├── routes/
+│   ├── health.ts      # Health check endpoint
+│   └── tokens.ts      # Token-related endpoints
+├── services/
+│   ├── moralis.ts     # Moralis SDK initialization
+│   └── redis.ts       # Redis client and caching logic
+└── types/
+    └── index.ts       # TypeScript type definitions
+```
 
-| Variable | Required | Description |
-|----------|-----------|-------------|
-| `BASE_RPC_URL` | Yes | Base mainnet RPC endpoint |
-| `ALCHEMY_API_KEY` | Yes | Alchemy API key for holder data |
-| `PORT` | No | Server port (default: 3001) |
-| `NODE_ENV` | No | Environment (development/production) |
+## Notes
 
-## CORS Configuration
-
-**Development:** Allows `localhost:3000` and `localhost:5173`
-**Production:** Configure your frontend domain in the server code
-
-## Logging
-
-The server provides comprehensive logging:
-- Request timestamps and methods
-- Response times
-- Error details (in development)
-- RPC connection status
-
-## Production Deployment
-
-1. Set `NODE_ENV=production`
-2. Configure proper CORS origins
-3. Use environment-specific RPC URLs
-4. Implement proper monitoring
-5. Set up reverse proxy (nginx)
-6. Configure SSL certificates
-
-## Rate Limiting
-
-Current implementation relies on Alchemy's rate limits. Consider implementing:
-- Redis-based rate limiting
-- Request caching
-- Queue system for high traffic
-
-## Security Considerations
-
-- Environment variables for sensitive data
-- Input validation and sanitization
-- Error message sanitization in production
-- CORS configuration
-- Request size limits
-
-## Next Steps
-
-- [ ] Add database caching layer
-- [ ] Implement holder classification logic
-- [ ] Add more blockchain networks
-- [ ] Implement API rate limiting
-- [ ] Add comprehensive testing suite
-- [ ] Add API documentation (Swagger)
-- [ ] Implement monitoring and alerting
-
-## License
-
-MIT License - see LICENSE file for details
+- The pools endpoint returns an empty array because Moralis SDK doesn't provide a direct `getTokenPairs` method
+- All token endpoints are cached for 5 minutes to reduce API calls
+- Base chain ID is hardcoded to `0x2105`
