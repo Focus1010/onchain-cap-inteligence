@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getMoralis, BASE_CHAIN_ID, initMoralis } from '../services/moralis';
 import { getCache, setCache, generateCacheKey } from '../services/redis';
-import { TokenHolder, Pool, ConcentrationMetrics, TokenMetadata, ErrorResponse } from '../types';
+import { getTokenPools, Pool as DexPool } from '../services/dexscreener.service';
+import { TokenHolder, ConcentrationMetrics, TokenMetadata, ErrorResponse } from '../types';
 
 // Validate Ethereum address
 function isValidAddress(address: string): boolean {
@@ -82,7 +83,7 @@ async function getPools(
   try {
     // Check cache first
     const cacheKey = generateCacheKey('pools', address);
-    const cached = await getCache<Pool[]>(cacheKey);
+    const cached = await getCache<DexPool[]>(cacheKey);
     if (cached) {
       reply.send(cached);
       return;
@@ -92,13 +93,10 @@ async function getPools(
     await initMoralis();
     const Moralis = getMoralis();
 
-    // Note: Moralis doesn't have a direct getTokenPairs endpoint
-    // Returning empty array with note for now
-    const pools: Pool[] = [];
-    console.log('Pools endpoint: Moralis SDK does not have getTokenPairs method');
+    const pools = await getTokenPools(address);
 
-    // Cache the result
-    await setCache(cacheKey, pools);
+    // Cache with 3 minute TTL (liquidity changes faster)
+    await setCache(cacheKey, pools, 180);
 
     reply.send(pools);
   } catch (error: any) {

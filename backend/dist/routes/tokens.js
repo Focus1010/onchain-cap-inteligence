@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.tokenRoutes = tokenRoutes;
 const moralis_1 = require("../services/moralis");
 const redis_1 = require("../services/redis");
+const dexscreener_service_1 = require("../services/dexscreener.service");
 // Validate Ethereum address
 function isValidAddress(address) {
     return /^0x[a-fA-F0-9]{40}$/.test(address);
@@ -74,12 +75,9 @@ async function getPools(request, reply) {
         // Initialize Moralis if needed
         await (0, moralis_1.initMoralis)();
         const Moralis = (0, moralis_1.getMoralis)();
-        // Note: Moralis doesn't have a direct getTokenPairs endpoint
-        // Returning empty array with note for now
-        const pools = [];
-        console.log('Pools endpoint: Moralis SDK does not have getTokenPairs method');
-        // Cache the result
-        await (0, redis_1.setCache)(cacheKey, pools);
+        const pools = await (0, dexscreener_service_1.getTokenPools)(address);
+        // Cache with 3 minute TTL (liquidity changes faster)
+        await (0, redis_1.setCache)(cacheKey, pools, 180);
         reply.send(pools);
     }
     catch (error) {

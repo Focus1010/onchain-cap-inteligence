@@ -4,6 +4,7 @@ exports.analyzeRoutes = analyzeRoutes;
 const moralis_1 = require("../services/moralis");
 const redis_1 = require("../services/redis");
 const classification_service_1 = require("../services/classification.service");
+const dexscreener_service_1 = require("../services/dexscreener.service");
 // Validate Ethereum address
 function isValidAddress(address) {
     return /^0x[a-fA-F0-9]{40}$/.test(address);
@@ -56,10 +57,10 @@ async function analyzeToken(request, reply) {
             is_contract: owner.isContract,
             entity_label: owner.entityLabel || null,
         }));
-        // Fetch pools (empty for now - Moralis doesn't have direct getTokenPairs)
-        const pools = [];
-        // Get all pool addresses for LP detection
-        const poolAddresses = pools.map((p) => p.pair_address?.toLowerCase());
+        // Fetch pools from DexScreener
+        const pools = await (0, dexscreener_service_1.getTokenPools)(address);
+        // Get all pool addresses for LP detection (lowercase)
+        const poolAddresses = pools.map((p) => p.pair_address.toLowerCase());
         // Classify all holders with new detailed classification
         const classifiedHolders = holders.map((holder) => ({
             ...holder,
@@ -107,7 +108,7 @@ async function analyzeToken(request, reply) {
             .slice(0, 5);
         // Calculate concentration metrics
         const raw_top5 = topHolders.reduce((sum, h) => sum + h.percentage_relative_to_total_supply, 0);
-        // Adjusted concentration includes EOAs and smart wallets (individual control)
+        // Adjusted concentration excludes contracts, LPs, staking, multisig, burn - includes only EOAs and smart wallets (individual control)
         const adjustedHolders = topHolders.filter((h) => h.classification === 'eoa' || h.classification === 'smart_wallet');
         const adjusted_top5 = adjustedHolders.reduce((sum, h) => sum + h.percentage_relative_to_total_supply, 0);
         // Individual holders count = EOAs + smart wallets
@@ -148,7 +149,18 @@ async function analyzeToken(request, reply) {
             pools: {
                 total_pools: pools.length,
                 total_liquidity_usd: pools.reduce((sum, p) => sum + (p.liquidity_usd || 0), 0),
-                pools: pools,
+                total_volume_24h: pools.reduce((sum, p) => sum + (p.volume_24h || 0), 0),
+                pools: pools.map((p) => ({
+                    pair_address: p.pair_address,
+                    dex_name: p.dex_name,
+                    base_token_symbol: p.base_token_symbol,
+                    quote_token_symbol: p.quote_token_symbol,
+                    liquidity_usd: p.liquidity_usd,
+                    volume_24h: p.volume_24h,
+                    price_usd: p.price_usd,
+                    price_change_24h: p.price_change_24h,
+                    created_at: p.created_at,
+                })),
             },
             classification_summary: classificationSummary,
             analyzed_at: new Date().toISOString(),
