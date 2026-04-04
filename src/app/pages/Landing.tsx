@@ -99,7 +99,7 @@ export function Landing() {
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
-            <span className="text-lg md:text-xl font-bold text-[#F9FAFB] tracking-tight">Clanker Holder Radar</span>
+            <span className="text-lg md:text-xl font-bold text-[#F9FAFB] tracking-tight">CapIntel</span>
           </motion.div>
           <div className="flex items-center gap-4 md:gap-6">
             <motion.a 
